@@ -78,7 +78,7 @@ def load_ibkr_csv(uploaded_file):
                     'Broker': 'IBKR',
                     'Νόμισμα': parts[4],
                     'Σύμβολο': parts[5],
-                    'Ημερομηνία': pd.to_datetime(parts[6]),
+                    'Ημερομηνία και ώρα': pd.to_datetime(parts[6]),
                     'Quantity': float(parts[7].replace(',', '')),
                     'T. Price': float(parts[8].replace(',', '')),
                     'Proceeds': float(parts[10].replace(',', '')),
@@ -113,7 +113,7 @@ def process_trades(df_trades, df_ecb):
     if df_trades.empty:
         return pd.DataFrame()
         
-    df_trades = df_trades.sort_values(by=['Σύμβολο', 'Ημερομηνία']).reset_index(drop=True)
+    df_trades = df_trades.sort_values(by=['Σύμβολο', 'Ημερομηνία και ώρα']).reset_index(drop=True)
     results = []
     inventory = {}
     
@@ -126,7 +126,7 @@ def process_trades(df_trades, df_ecb):
         proceeds = row['Proceeds']
         comm = row['Comm/Fee']
         currency = row['Νόμισμα']
-        date = row['Ημερομηνία']
+        date = row['Ημερομηνία και ώρα']
         
         rate = get_ecb_rate(df_ecb, date, currency)
         
@@ -178,7 +178,7 @@ def process_trades(df_trades, df_ecb):
             'Broker': row['Broker'],
             'Σύμβολο': sym,
             'Νόμισμα': currency,
-            'Ημερομηνία': date,
+            'Ημερομηνία και ώρα': date,
             'Quantity': qty,
             'T. Price': row['T. Price'],
             'Proceeds': proceeds,
@@ -225,7 +225,7 @@ def process_dividends(df_divs, df_with, df_ecb):
             
             div_results.append({
                 'Broker': 'IBKR',
-                'Ημερομηνία': date,
+                'Ημερομηνία και ώρα': date,
                 'Νόμισμα': curr,
                 'Περιγραφή': desc,
                 'Μεικτό μέρισμα (ξένο νόμισμα)': amount,
@@ -240,12 +240,23 @@ def process_dividends(df_divs, df_with, df_ecb):
 # -----------------
 # STREAMLIT APP
 # -----------------
-st.set_page_config(page_title="Greek Stock Tax Automation", page_icon="📈", layout="wide")
+st.set_page_config(page_title="IBKR GR TAX", page_icon="📈", layout="wide")
 
-st.title("📈 Αυτοματοποίηση Υπολογισμών Φορολογίας (IBKR)")
-st.markdown("Ανεβάστε το Activity Statement CSV αρχείο από την Interactive Brokers. Η εφαρμογή θα κατεβάσει **αυτόματα** τις ισοτιμίες από την Ευρωπαϊκή Κεντρική Τράπεζα (ΕΚΤ) και θα εξάγει το Excel για το Ε1 και τους φόρους 0.1% ανά μήνα.")
+st.title("📈 Υπολογισμοί ελληνικών φόρων IBKR")
+st.markdown("""
+Παρακαλώ ανεβάστε ένα μηνιαίο ή ετήσιο Activity Statement CSV αρχείο από την Interactive Brokers.  
+Η εφαρμογή θα χρησιμοποιήσει τις επίσημες ισοτιμίες από την Ευρωπαϊκή Κεντρική Τράπεζα (ΕΚΤ) και θα εξάγει ένα αρχείο Excel στο οποίο καταγράφονται με λεπτομερή τρόπο οι αθροίσεις με βάση τις οποίες θα πρέπει να γίνει η συμπλήρωση των σχετικών πεδίων του Ε1.  
+Επίσης το αρχείο Excel περιέχει φύλλα υπολογισμών για τους μηνιαίους φόρους πώλησης μετοχών 1‰ (ένα τοις χιλίοις) προς απόδοση, καθώς δεν παρακρατούνται από την IBKR και η απόδοσή τους βαρύνει τον φορολογούμενο.
+""")
 
-uploaded_file = st.file_uploader("Σύρετε και αφήστε (Drag & Drop) το αρχείο CSV του IBKR εδώ", type=['csv'])
+st.markdown("""
+- **Auto-ECB Rates:** Αντλεί δυναμικά τις [επίσημες ισοτιμίες της Ευρωπαϊκής Κεντρικής Τράπεζας (ΕΚΤ)](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) για μετατροπές σε EUR με βάση τις ημερομηνίες που υπάρχουν στο δελτίο συναλλαγών.
+- **Κυλιόμενο μεσοσταθμικό κόστος:** Υπολογίζει το ακριβές κυλιόμενο μεσοσταθμικό κόστος για κάθε θέση μετοχής.
+- **Ανάλωση Κεφαλαίου:** Υπολογίζει αυτόματα τα κέρδη, αξία πωλήσεων και ανάλωση κεφαλαίου.
+- **Φύλλα υπολογισμών για τον φόρο πώλησης μετοχών 1 τοις χιλίοις:** Δημιουργεί ξεχωριστά φύλλα εργασίας (tabs) ομαδοποιώντας τις πωλήσεις ανά μήνα για να υποβοηθήσει στη μηνιαία δήλωση του φόρου πωλήσεων 1‰ (0.1%).
+""")
+
+uploaded_file = st.file_uploader("Ανέβασμα Αρχείου CSV IBKR", type=['csv'])
 
 if uploaded_file is not None:
     with st.spinner("Λήψη Ισοτιμιών από Ευρωπαϊκή Κεντρική Τράπεζα (ΕΚΤ)..."):
@@ -264,11 +275,45 @@ if uploaded_file is not None:
                 if not res_trades.empty:
                     res_trades.to_excel(writer, sheet_name='Μετοχές_Ετήσιο', index=False)
                     
+                    workbook = writer.book
+                    worksheet = writer.sheets['Μετοχές_Ετήσιο']
+                    
+                    # Auto-fit columns and format headers
+                    from openpyxl.styles import Font, PatternFill, Alignment
+                    
+                    header_font = Font(bold=True, color="FFFFFF")
+                    header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+                    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    
+                    for col_idx, col_name in enumerate(res_trades.columns, 1):
+                        cell = worksheet.cell(row=1, column=col_idx)
+                        cell.font = header_font
+                        cell.fill = header_fill
+                        cell.alignment = header_alignment
+                        
+                        # Set column width slightly wider than header
+                        width = max(len(col_name) * 1.4, 20) if 'Ημερομηνία' in col_name else min(len(col_name) * 1.2, 40)
+                        worksheet.column_dimensions[cell.column_letter].width = width
+                    
+                    # Add Totals Row
+                    last_row = len(res_trades) + 1
+                    worksheet.cell(row=last_row + 2, column=1, value="ΣΥΝΟΛΑ ΞΕΝΟΥ ΝΟΜΙΣΜΑΤΟΣ/EUR:").font = Font(bold=True)
+                    
+                    sum_columns = ['Κέρδος από την Πώληση Ε1:659', 'Έσοδο από Πώληση περιουσιακού στοιχείου Ε1:781', 'Ανάλωση Κεφαλαίου για αγορά περιουσιακού στοιχείου Ε1:743']
+                    
+                    for col_name in sum_columns:
+                        if col_name in res_trades.columns:
+                            col_idx = res_trades.columns.get_loc(col_name) + 1
+                            total = res_trades[col_name].sum()
+                            sum_cell = worksheet.cell(row=last_row + 2, column=col_idx, value=total)
+                            sum_cell.font = Font(bold=True)
+                    
+                    
                     # 2. Μηνιαία Φύλλα 0.1% Φόρου (Μόνο Πωλήσεις)
                     sales_df = res_trades[res_trades['Quantity'] < 0].copy()
                     if not sales_df.empty:
                         # Add YearMonth column for grouping
-                        sales_df['YearMonth'] = pd.to_datetime(sales_df['Ημερομηνία']).dt.to_period('M')
+                        sales_df['YearMonth'] = pd.to_datetime(sales_df['Ημερομηνία και ώρα']).dt.to_period('M')
                         months = sales_df['YearMonth'].unique()
                         
                         for month in sorted(months):
@@ -280,17 +325,39 @@ if uploaded_file is not None:
                             
                             # Write sum of tax at the bottom
                             worksheet = writer.sheets[sheet_name]
+                            for col_idx, col_name in enumerate(month_df.columns, 1):
+                                cell = worksheet.cell(row=1, column=col_idx)
+                                cell.font = header_font
+                                cell.fill = header_fill
+                                cell.alignment = header_alignment
+                                width = max(len(col_name) * 1.4, 20) if 'Ημερομηνία' in col_name else min(len(col_name) * 1.2, 40)
+                                worksheet.column_dimensions[cell.column_letter].width = width
+                                
                             last_row = len(month_df) + 1
                             tax_col_idx = month_df.columns.get_loc('Φόρος Πώλησης 0,1% (EUR)') + 1
                             tax_sum = month_df['Φόρος Πώλησης 0,1% (EUR)'].sum()
                             
                             # Add Total Row
-                            worksheet.cell(row=last_row + 2, column=tax_col_idx - 1, value="ΣΥΝΟΛΟ ΦΟΡΟΥ ΜΗΝΑ:")
+                            worksheet.cell(row=last_row + 2, column=tax_col_idx - 1, value="ΣΥΝΟΛΟ ΦΟΡΟΥ ΜΗΝ.").alignment = Alignment(horizontal="right")
                             worksheet.cell(row=last_row + 2, column=tax_col_idx, value=tax_sum)
 
                 # 3. Μερίσματα
                 if not res_divs.empty:
                     res_divs.to_excel(writer, sheet_name='Μερίσματα', index=False)
+                    
+                    worksheet_divs = writer.sheets['Μερίσματα']
+                    for col_idx, col_name in enumerate(res_divs.columns, 1):
+                        cell = worksheet_divs.cell(row=1, column=col_idx)
+                        cell.font = header_font
+                        cell.fill = header_fill
+                        cell.alignment = header_alignment
+                        if 'Περιγραφή' in col_name:
+                            width = max(len(col_name) * 1.4, 60)
+                        elif 'Ημερομηνία' in col_name:
+                            width = max(len(col_name) * 1.4, 20)
+                        else:
+                            width = min(len(col_name) * 1.2, 40)
+                        worksheet_divs.column_dimensions[cell.column_letter].width = width
             
             processed_data = output.getvalue()
             
